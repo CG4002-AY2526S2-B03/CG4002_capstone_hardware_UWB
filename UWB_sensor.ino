@@ -1,29 +1,17 @@
 #include <HardwareSerial.h>
 #include <math.h>
-#include <WiFi.h>
-#include <ArduinoJson.h>
-#include "ESP32MQTTClient.h"
+#include "Mqtt.h"
+#include "config.h"
 
 #define UWB_RX 35  // to IO5/RX on UWB sensor
 #define UWB_TX 15  // to IO6/TX on UWB sensor
 
 HardwareSerial uwb(2);
 
-float anchor2_x = 2.0;  // will be set during calibration; but set to 2m jic
+float anchor2_x = 2.0;    // will be set during calibration; but set to 2m jic
 const float alpha = 0.4;  // 0.2 smoother, 0.4 more responsive; for EMA smoothing
 
-const char *ssid = "BEL 7462";
-const char *password = "9*9V7p68";
-const char *mqtt_broker = "172.20.10.11";
-const char *clientID = "esp32-player-client";
-const std::string playerEspPublishTopic = "/playerPosition";
-ESP32MQTTClient mqttClient;
-
-typedef struct {
-  float x;
-  float y;
-} Position;
-
+// ----------- QUEUE HANDLES -----------
 QueueHandle_t positionQueue;
 
 // -------- Helper Functions ----------
@@ -44,12 +32,12 @@ void configureTag() {
   sendAT("AT+RESPONDER_NUM=2");
   sendAT("AT+SRCADDR=0000");
   sendAT("AT+DSTADDR=11112222333344445555");
-  sendAT("AT+INTV=20");
+  sendAT("AT+INTV=200");
   sendAT("AT+RESET");
   Serial.println("Tag configured. Starting ranging...");
 }
 // -------- Noise-tolerant 2-anchor least-squares solver ----------
-bool computeXY_LS(float d1, float d2, float &x, float &y) {
+void computeXY_LS(float d1, float d2, float &x, float &y) {
 
   // ----- Approximate X using distance difference (stable) -----
   x = (d1 * d1 - d2 * d2 + anchor2_x * anchor2_x) / (2 * anchor2_x);
@@ -67,8 +55,6 @@ bool computeXY_LS(float d1, float d2, float &x, float &y) {
 
   // Least-squares estimate of Y
   y = (sqrt(y_sq1) + sqrt(y_sq2)) / 2.0;
-
-  return true;
 }
 // -------- Parse distance from UWB output ----------
 bool parseDistance(String line, String &srcAddr, float &dist) {
@@ -85,7 +71,6 @@ bool parseDistance(String line, String &srcAddr, float &dist) {
     dist = val.toFloat() / 100.0;  // convert cm -> meters
     return true;
   }
-  Serial.println("incorrect raw data format");
   return false;
 }
 // -------- Calibration function ----------
@@ -95,84 +80,65 @@ void calibrateAnchors(float d1, float d2) {
   Serial.print(anchor2_x, 2);
   Serial.println(" m");
 }
-std::string formatPayload(float x, float y) {
-
-  JsonDocument doc;
-
-  doc["clientID"] = clientID;
-
-  doc["position"]["x"] = x;
-  doc["position"]["y"] = y;
-
-  std::string payload;
-  serializeJson(doc, payload);
-
-  return payload;
-
-}
-void wifiConnect() {
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Connecting WiFi...");
-    delay(500);
-  }
-
-  Serial.println("WiFi connected");
-}
 
 void setup() {
   Serial.begin(115200);
   Serial.println("\nFireBeetle UWB Tag System Starting...");
 
   uwb.begin(921600, SERIAL_8N1, UWB_RX, UWB_TX);
-
+  delay(50);
   configureTag();
 
-  wifiConnect();
+  // Queues
+  positionQueue = xQueueCreate(1, sizeof(Position));
 
+  // ===== HANDLE MQTT =====
+  wifiConnect();
   mqttClient.setMqttClientName(clientID);
-  mqttClient.setURL(mqtt_broker, 1883, "", "");
+  mqttClient.enableLastWillMessage("/will", "esp32-client-paddle went offline", false);
+
+  String mqttBrokerURL = String(mqtt_broker);
+  mqttClient.setURL(mqttBrokerURL.c_str(), 8883, "", "");
+  mqttClient.setCaCert(caCert);
+  mqttClient.setClientCert(clientCert);
+  mqttClient.setKey(clientKey);
   mqttClient.loopStart();
 
-  positionQueue = xQueueCreate(1, sizeof(Position));
   xTaskCreatePinnedToCore(
-    uwbTask,
-    "UWB Task",
-    6000,
-    NULL,
-    2,
-    NULL,
-    1
-  );
-  xTaskCreatePinnedToCore(
-    wirelessTask,
-    "Wireless Task",
+    mqttTask,
+    "MQTT Task",
     6000,
     NULL,
     1,
     NULL,
-    0
-  );
+    0);
+
+  xTaskCreatePinnedToCore(
+  uwbTask,
+  "UWB Task",
+  6000,
+  NULL,
+  2,
+  NULL,
+  1);
 }
 
-void onMqttEvent(esp_mqtt_event_handle_t event) {
-  mqttClient.onEventCallback(event);
-}
-
-void wirelessTask(void *pvParameters) {
+void mqttTask(void *pvParameters) {
   Position pos;
-  while (1) {
+  while (true) {
     if (WiFi.status() != WL_CONNECTED) {
       wifiConnect();
     }
-    if (mqttClient.isConnected()) {
-      if (xQueueReceive(positionQueue, &pos, 0) == pdTRUE) {
+    if (xQueueReceive(positionQueue, &pos, 0) == pdTRUE) {
+      if (mqttClient.isConnected()) {
         std::string payload = formatPayload(pos.x, pos.y);
         mqttClient.publish(playerEspPublishTopic, payload, 0, false);
-        Serial.printf("Sent: %s\n", payload.c_str());
+        Serial.print("Position: ");
+        Serial.print(pos.x);
+        Serial.print(" , ");
+        Serial.println(pos.y);
       }
-    }    
+    }
     vTaskDelay(50 / portTICK_PERIOD_MS);
   }
 }
@@ -184,8 +150,7 @@ void uwbTask(void *pvParameters) {
   int hist_index = 0;
 
   // ===== EMA filtered position =====
-  float x_filtered = 0;
-  float y_filtered = 0;
+  Position pos;
   bool first_position = true;
 
   float d1 = 0.0, d2 = 0.0;
@@ -220,21 +185,17 @@ void uwbTask(void *pvParameters) {
         // Compute position
         if (!calibrate) {
           float x, y;
-          if (computeXY_LS(d1, d2, x, y)) {
-            // ----- EMA smoothing
-            if (first_position) {
-              x_filtered = x;
-              y_filtered = y;
-              first_position = false;
-            } else {
-              x_filtered = alpha * x + (1 - alpha) * x_filtered;
-              y_filtered = alpha * y + (1 - alpha) * y_filtered;
-            }
-
-            Serial.print(x);
-            Serial.print(", ");
-            Serial.println(y);
+          computeXY_LS(d1, d2, x, y);
+          // ----- EMA smoothing
+          if (first_position) {
+            pos.x = x;
+            pos.y = y;
+            first_position = false;
+          } else {
+            pos.x = alpha * x + (1 - alpha) * pos.x;
+            pos.y = alpha * y + (1 - alpha) * pos.y;
           }
+          xQueueSend(positionQueue, &pos, 0);
         }
       }
     }
