@@ -4,8 +4,8 @@
 #include "config.h"
 #include "uwb_processing.h"
 
-#define UWB_RX 35  // to IO5/RX on UWB sensor
-#define UWB_TX 15  // to IO6/TX on UWB sensor
+#define UWB_RX 26  // to IO5/RX on UWB sensor
+#define UWB_TX 27  // to IO6/TX on UWB sensor
 
 HardwareSerial uwb(2);
 
@@ -91,7 +91,6 @@ void uwbTask(void *pvParameters) {
     if (uwb.available()) {
       String line = uwb.readStringUntil('\n');
       line.trim();
-
       String src;
       float dist;
       if (parseDistance(line, src, dist)) {
@@ -127,6 +126,10 @@ void uwbTask(void *pvParameters) {
             pos.y = alpha * y + (1 - alpha) * pos.y;
           }
           xQueueSend(positionQueue, &pos, 0);
+          // Serial.print("Position: ");
+          // Serial.print(pos.x);
+          // Serial.print(" , ");
+          // Serial.println(pos.y);
         }
       }
     }
