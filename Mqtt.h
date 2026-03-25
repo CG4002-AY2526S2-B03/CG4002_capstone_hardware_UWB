@@ -6,6 +6,7 @@
 #include "config.h"
 
 extern ESP32MQTTClient mqttClient;
+extern bool hasGameStarted;
 
 typedef struct {
   float x;

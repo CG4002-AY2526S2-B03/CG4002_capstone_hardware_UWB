@@ -9,6 +9,9 @@
 
 HardwareSerial uwb(2);
 
+// --------- GLOBAL VARIABLES ----------
+bool hasGameStarted = false;
+
 // ----------- QUEUE HANDLES -----------
 QueueHandle_t positionQueue;
 
@@ -26,7 +29,7 @@ void setup() {
   // ===== HANDLE MQTT =====
   wifiConnect();
   mqttClient.setMqttClientName(clientID);
-  mqttClient.enableLastWillMessage("/will", "esp32-client-paddle went offline", false);
+  mqttClient.enableLastWillMessage("/will", "esp32-player-client went offline", false);
 
   String mqttBrokerURL = String(mqtt_broker);
   mqttClient.setURL(mqttBrokerURL.c_str(), 8883, "", "");
@@ -61,7 +64,7 @@ void mqttTask(void *pvParameters) {
       wifiConnect();
     }
     if (xQueueReceive(positionQueue, &pos, 0) == pdTRUE) {
-      if (mqttClient.isConnected()) {
+      if (mqttClient.isConnected() && hasGameStarted) {
         std::string payload = formatPayload(pos.x, pos.y);
         mqttClient.publish(playerEspPublishTopic, payload, 0, false);
         Serial.print("Position: ");
@@ -91,6 +94,9 @@ void uwbTask(void *pvParameters) {
     if (uwb.available()) {
       String line = uwb.readStringUntil('\n');
       line.trim();
+      Serial.println(line);
+
+
       String src;
       float dist;
       if (parseDistance(line, src, dist)) {
@@ -126,10 +132,10 @@ void uwbTask(void *pvParameters) {
             pos.y = alpha * y + (1 - alpha) * pos.y;
           }
           xQueueSend(positionQueue, &pos, 0);
-          // Serial.print("Position: ");
-          // Serial.print(pos.x);
-          // Serial.print(" , ");
-          // Serial.println(pos.y);
+          Serial.print("Position: ");
+          Serial.print(pos.x);
+          Serial.print(" , ");
+          Serial.println(pos.y);
         }
       }
     }
