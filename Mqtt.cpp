@@ -13,24 +13,27 @@ void wifiConnect() {
 
 void onMqttConnect(esp_mqtt_client_handle_t client) {
   if (mqttClient.isMyTurn(client)) {
-    mqttClient.subscribe(playerEspSubscribeTopic, [](const std::string &payload) {
-      #ifdef DEBUG
-      Serial.printf("[%s] Received: %s\n", playerEspSubscribeTopic.c_str(), payload.c_str());
-      #endif
-      if (payload == "START") {
-        Serial.println("[SYSTEM] Game started.");
-        hasGameStarted = true;
-      } else if (payload == "STOP") {
-        Serial.println("[SYSTEM] Game ended.");
-        hasGameStarted = false;
-      }          
-    });
-
-    // @ clarinet here are the receiving functions for calibration
-    // if (receivedMessage == "CALIBRATE_UWB") {
-    //   bool trigger = true;
-    //   xQueueSend(calibrationQueue, &trigger, 0);
-    // }
+    for (const auto& topic : playerEspSubscribeTopics) {
+      mqttClient.subscribe(topic, [topic](const std::string &payload) {
+        #ifdef DEBUG
+        Serial.printf("[%s] Received: %s\n", topic.c_str(), payload.c_str());
+        #endif
+        if (topic == "/system/signal") {
+          if (payload == "START") {
+            Serial.println("[SYSTEM] Game started.");
+            hasGameStarted = true;
+          } else if (payload == "STOP") {
+            Serial.println("[SYSTEM] Game ended.");
+            hasGameStarted = false;
+          }     
+        }
+        // @ clarinet here are the receiving functions for calibration
+        else if (topic == "/positionCalibration") {
+          bool trigger = true;
+          xQueueSend(calibrationQueue, &trigger, 0);
+        }
+      });
+    }
 
     // publish READY to system-coordinator
     mqttClient.publish("/status/esp32-player-client", "READY", 1, false);

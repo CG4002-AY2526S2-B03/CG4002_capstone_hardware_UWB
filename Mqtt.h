@@ -7,6 +7,7 @@
 
 extern ESP32MQTTClient mqttClient;
 extern bool hasGameStarted;
+extern QueueHandle_t calibrationQueue;
 
 typedef struct {
   float x;

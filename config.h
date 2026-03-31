@@ -8,7 +8,8 @@ inline const char *password = "9*9V7p68";
 inline const char *mqtt_broker = "172.20.10.11";
 inline const char *clientID = "esp32-player-client";
 inline const std::string playerEspPublishTopic = "/playerPosition";
-inline const std::string playerEspSubscribeTopic = "/system/signal";
+inline const std::string playerEspSubscribeTopics[] = {"/system/signal", "/positionCalibration"};
+
 
 // TLS Configuration
 inline const char* caCert = R"EOF(
