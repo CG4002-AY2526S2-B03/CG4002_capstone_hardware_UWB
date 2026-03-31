@@ -7,6 +7,8 @@
 #define UWB_RX 26  // to IO5/RX on UWB sensor
 #define UWB_TX 27  // to IO6/TX on UWB sensor
 
+#define DEBUG // enables print statements for debugging 
+
 HardwareSerial uwb(2);
 
 // --------- GLOBAL VARIABLES ----------
@@ -14,6 +16,7 @@ bool hasGameStarted = false;
 
 // ----------- QUEUE HANDLES -----------
 QueueHandle_t positionQueue;
+QueueHandle_t calibrationQueue;
 
 void setup() {
   Serial.begin(115200);
@@ -25,6 +28,7 @@ void setup() {
 
   // Queues
   positionQueue = xQueueCreate(1, sizeof(Position));
+  calibrationQueue = xQueueCreate(1, sizeof(bool));
 
   // ===== HANDLE MQTT =====
   wifiConnect();
@@ -67,10 +71,12 @@ void mqttTask(void *pvParameters) {
       if (mqttClient.isConnected() && hasGameStarted) {
         std::string payload = formatPayload(pos.x, pos.y);
         mqttClient.publish(playerEspPublishTopic, payload, 0, false);
+        #ifdef DEBUG
         Serial.print("Position: ");
         Serial.print(pos.x);
         Serial.print(" , ");
         Serial.println(pos.y);
+        #endif
       }
     }
     vTaskDelay(50 / portTICK_PERIOD_MS);
@@ -91,11 +97,19 @@ void uwbTask(void *pvParameters) {
   bool calibrate = true;  // set true to perform calibration
 
   while (1) {
+    // Check if calibration requested
+    bool calibrateRequest = false;
+    if (xQueueReceive(calibrationQueue, &calibrateRequest , 0) == pdTRUE) {
+        calibrate = true;
+    }
+
     if (uwb.available()) {
       String line = uwb.readStringUntil('\n');
       line.trim();
-      Serial.println(line);
 
+      #ifdef DEBUG
+      Serial.println(line);
+      #endif
 
       String src;
       float dist;
@@ -132,10 +146,12 @@ void uwbTask(void *pvParameters) {
             pos.y = alpha * y + (1 - alpha) * pos.y;
           }
           xQueueSend(positionQueue, &pos, 0);
+          #ifdef DEBUG
           Serial.print("Position: ");
           Serial.print(pos.x);
           Serial.print(" , ");
           Serial.println(pos.y);
+          #endif
         }
       }
     }

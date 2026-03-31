@@ -66,7 +66,9 @@ bool parseDistance(String line, String &srcAddr, float &dist) {
 // -------- Calibration function ----------
 void calibrateAnchors(float d1, float d2) {
   anchor2_x = d1 + d2;  // tag assumed between anchors
+  #ifdef DEBUG
   Serial.print("Calibration done! Anchor distance = ");
   Serial.print(anchor2_x, 2);
   Serial.println(" m");
+  #endif
 }
