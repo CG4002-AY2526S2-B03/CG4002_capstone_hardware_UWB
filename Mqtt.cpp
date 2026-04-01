@@ -18,19 +18,22 @@ void onMqttConnect(esp_mqtt_client_handle_t client) {
         #ifdef DEBUG
         Serial.printf("[%s] Received: %s\n", topic.c_str(), payload.c_str());
         #endif
-        if (topic == "/system/signal") {
-          if (payload == "START") {
-            Serial.println("[SYSTEM] Game started.");
-            hasGameStarted = true;
-          } else if (payload == "STOP") {
-            Serial.println("[SYSTEM] Game ended.");
-            hasGameStarted = false;
-          }     
-        }
-        // @ clarinet here are the receiving functions for calibration
-        else if (topic == "/positionCalibration") {
-          bool trigger = true;
-          xQueueSend(calibrationQueue, &trigger, 0);
+
+        switch (topic) {
+          case "/system/signal":
+            if (payload == "START") {
+              Serial.println("[SYSTEM] Game started.");
+              hasGameStarted = true;
+            } else if (payload == "STOP") {
+              Serial.println("[SYSTEM] Game ended.");
+              hasGameStarted = false;
+            }
+            break;
+          
+          case "/positionCalibration":
+            bool trigger = true;
+            xQueueSend(calibrationQueue, &trigger, 0);
+            break;
         }
       });
     }

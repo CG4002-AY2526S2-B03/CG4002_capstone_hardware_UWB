@@ -100,7 +100,7 @@ void uwbTask(void *pvParameters) {
     // Check if calibration requested
     bool calibrateRequest = false;
     if (xQueueReceive(calibrationQueue, &calibrateRequest , 0) == pdTRUE) {
-        calibrate = true;
+      calibrate = true;
     }
 
     if (uwb.available()) {
