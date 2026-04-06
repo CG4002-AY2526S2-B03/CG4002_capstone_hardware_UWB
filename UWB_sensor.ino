@@ -36,10 +36,13 @@ void setup() {
   mqttClient.enableLastWillMessage("/will", "esp32-player-client went offline", false);
 
   String mqttBrokerURL = String(mqtt_broker);
-  mqttClient.setURL(mqttBrokerURL.c_str(), 8883, "", "");
-  mqttClient.setCaCert(caCert);
-  mqttClient.setClientCert(clientCert);
-  mqttClient.setKey(clientKey);
+  mqttClient.setURL(mqttBrokerURL.c_str(), 1883, "", "");
+
+  // String mqttBrokerURL = String(mqtt_broker);
+  // mqttClient.setURL(mqttBrokerURL.c_str(), 8883, "", "");
+  // mqttClient.setCaCert(caCert);
+  // mqttClient.setClientCert(clientCert);
+  // mqttClient.setKey(clientKey);
   mqttClient.loopStart();
 
   xTaskCreatePinnedToCore(
