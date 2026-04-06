@@ -74,21 +74,13 @@ void mqttTask(void *pvParameters) {
       if (mqttClient.isConnected() && hasGameStarted) {
         std::string payload = formatPayload(pos.x, pos.y);
         mqttClient.publish(playerEspPublishTopic, payload, 0, false);
-<<<<<<< Updated upstream
+        
         #ifdef DEBUG
         Serial.print("[MQTT] Position: ");
         Serial.print(pos.x);
         Serial.print(" , ");
         Serial.println(pos.y);
         #endif
-=======
-        // #ifdef DEBUG
-        // Serial.print("Position: ");
-        // Serial.print(pos.x);
-        // Serial.print(" , ");
-        // Serial.println(pos.y);
-        // #endif
->>>>>>> Stashed changes
       }
     }
     vTaskDelay(50 / portTICK_PERIOD_MS);
