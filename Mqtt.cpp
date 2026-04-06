@@ -19,21 +19,17 @@ void onMqttConnect(esp_mqtt_client_handle_t client) {
         Serial.printf("[%s] Received: %s\n", topic.c_str(), payload.c_str());
         #endif
 
-        switch (topic) {
-          case "/system/signal":
-            if (payload == "START") {
-              Serial.println("[SYSTEM] Game started.");
-              hasGameStarted = true;
-            } else if (payload == "STOP") {
-              Serial.println("[SYSTEM] Game ended.");
+        if (topic == "/system/signal") {
+          if (payload == "START") {
+            Serial.println("[SYSTEM] Game started.");
+            hasGameStarted = true;
+          } else if (payload == "STOP") {
+            Serial.println("[SYSTEM] Game ended.");
               hasGameStarted = false;
-            }
-            break;
-          
-          case "/positionCalibration":
+            }          
+          } else if (topic == "/positionCalibration") {
             bool trigger = true;
             xQueueSend(calibrationQueue, &trigger, 0);
-            break;
         }
       });
     }

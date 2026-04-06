@@ -12,7 +12,7 @@
 HardwareSerial uwb(2);
 
 // --------- GLOBAL VARIABLES ----------
-bool hasGameStarted = false;
+bool hasGameStarted = true;
 
 // ----------- QUEUE HANDLES -----------
 QueueHandle_t positionQueue;
@@ -72,7 +72,7 @@ void mqttTask(void *pvParameters) {
         std::string payload = formatPayload(pos.x, pos.y);
         mqttClient.publish(playerEspPublishTopic, payload, 0, false);
         #ifdef DEBUG
-        Serial.print("Position: ");
+        Serial.print("[MQTT] Position: ");
         Serial.print(pos.x);
         Serial.print(" , ");
         Serial.println(pos.y);
