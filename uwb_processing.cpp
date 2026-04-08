@@ -3,7 +3,7 @@
 
 // -------- GLOBALS --------
 float anchor2_x = 2.0;    // will be set during calibration; but set to 2m jic
-const float alpha = 0.2;  // 0.2 smoother, 0.4 more responsive; for EMA smoothing
+const float alpha = 0.3;  // 0.2 smoother, 0.4 more responsive; for EMA smoothing
 
 // changed alpha from 0.4 to 0.2
 // moved EMA from x and y to d1 and d2
@@ -74,4 +74,46 @@ void calibrateAnchors(float d1, float d2) {
   Serial.print(anchor2_x, 2);
   Serial.println(" m");
   #endif
+}
+
+bool collectCalibrationSample(float d1, float d2, float &offset_x, float &offset_y) {
+  static float d1_samples[CALIBRATION_SAMPLE_SIZE];
+  static float d2_samples[CALIBRATION_SAMPLE_SIZE];
+  static int sample_count = 0;
+
+  d1_samples[sample_count] = d1;
+  d2_samples[sample_count] = d2;
+  sample_count++;
+
+  Serial.print("[CAL] Sample ");
+  Serial.print(sample_count);
+  Serial.print("/");
+  Serial.println(CALIBRATION_SAMPLE_SIZE);
+
+  if (sample_count < CALIBRATION_SAMPLE_SIZE) return false;
+
+  // --- Simple mean over all samples ---
+  float d1_sum = 0, d2_sum = 0;
+  for (int i = 0; i < CALIBRATION_SAMPLE_SIZE; i++) {
+    d1_sum += d1_samples[i];
+    d2_sum += d2_samples[i];
+  }
+
+  float d1_cal = d1_sum / CALIBRATION_SAMPLE_SIZE;
+  float d2_cal = d2_sum / CALIBRATION_SAMPLE_SIZE;
+
+  // --- Set anchor separation and compute origin offset ---
+  calibrateAnchors(d1_cal, d2_cal);
+
+  float cal_x, cal_y;
+  computeXY_LS(d1_cal, d2_cal, cal_x, cal_y);
+  offset_x = cal_x;
+  offset_y = cal_y;
+
+  Serial.print("[CAL] Done. anchor2_x="); Serial.print(anchor2_x, 3);
+  Serial.print("  offset=("); Serial.print(offset_x, 3);
+  Serial.print(", "); Serial.print(offset_y, 3); Serial.println(")");
+
+  sample_count = 0;
+  return true;
 }

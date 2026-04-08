@@ -13,7 +13,6 @@ HardwareSerial uwb(2);
 
 // --------- GLOBAL VARIABLES ----------
 bool hasGameStarted = true;
-static int offset;
 
 // ----------- QUEUE HANDLES -----------
 QueueHandle_t positionQueue;
@@ -104,11 +103,15 @@ void uwbTask(void *pvParameters) {
   float d1 = 0.0, d2 = 0.0;
   bool calibrate = true;  // set true to perform calibration
 
+  float offset_x = 0.0f;
+  float offset_y = 0.0f;
+
   while (1) {
     // Check if calibration requested
     bool calibrateRequest = false;
     if (xQueueReceive(calibrationQueue, &calibrateRequest , 0) == pdTRUE) {
       calibrate = true;
+      Serial.println("calibrate received");
     }
 
     if (uwb.available()) {
@@ -116,7 +119,7 @@ void uwbTask(void *pvParameters) {
       line.trim();
 
       #ifdef DEBUG
-      Serial.println(line);
+      // Serial.println(line);
       #endif
 
       String src;
@@ -127,9 +130,14 @@ void uwbTask(void *pvParameters) {
 
         // Perform calibration if requested
         if (calibrate && d1 > 0 && d2 > 0) {
-          offset = d1;
-          calibrateAnchors(d1, d2);
-          calibrate = false;
+          bool done = collectCalibrationSample(d1, d2, offset_x, offset_y);
+
+          float cal_x, cal_y;
+          computeXY_LS(d1, d2, cal_x, cal_y);  // compute position AT calibration point
+          
+          if (done) calibrate = false;
+          // Skip position computation until calibration is complete
+          continue;
         }
 
         // Compute position
@@ -154,14 +162,16 @@ void uwbTask(void *pvParameters) {
           }
 
           computeXY_LS(d1_ema, d2_ema, pos.x, pos.y);
-          pos.x -= offset;  // apply calibration offset
+
+          pos.x -= offset_x;
+          pos.y -= offset_y;
           xQueueSend(positionQueue, &pos, 0);
 
           #ifdef DEBUG
-          Serial.print("Position: ");
-          Serial.print(pos.x);
-          Serial.print(" , ");
-          Serial.println(pos.y);
+          // Serial.print("Position: ");
+          // Serial.print(pos.x);
+          // Serial.print(" , ");
+          // Serial.println(pos.y);
           #endif
         }
       }
