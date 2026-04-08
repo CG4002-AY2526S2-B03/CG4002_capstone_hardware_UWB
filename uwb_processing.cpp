@@ -26,7 +26,7 @@ void configureTag(HardwareSerial &uwb) {
   sendAT("AT+RESPONDER_NUM=2", uwb);
   sendAT("AT+SRCADDR=0000", uwb);
   sendAT("AT+DSTADDR=11112222333344445555", uwb);
-  sendAT("AT+INTV=200", uwb);
+  sendAT("AT+INTV=50", uwb);
   sendAT("AT+RESET", uwb);
 }
 // -------- Noise-tolerant 2-anchor least-squares solver ----------
