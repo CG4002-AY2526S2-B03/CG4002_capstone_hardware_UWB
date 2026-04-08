@@ -13,6 +13,7 @@ HardwareSerial uwb(2);
 
 // --------- GLOBAL VARIABLES ----------
 bool hasGameStarted = true;
+static int offset;
 
 // ----------- QUEUE HANDLES -----------
 QueueHandle_t positionQueue;
@@ -126,6 +127,7 @@ void uwbTask(void *pvParameters) {
 
         // Perform calibration if requested
         if (calibrate && d1 > 0 && d2 > 0) {
+          offset = d1;
           calibrateAnchors(d1, d2);
           calibrate = false;
         }
@@ -152,6 +154,7 @@ void uwbTask(void *pvParameters) {
           }
 
           computeXY_LS(d1_ema, d2_ema, pos.x, pos.y);
+          pos.x -= offset;  // apply calibration offset
           xQueueSend(positionQueue, &pos, 0);
 
           #ifdef DEBUG
