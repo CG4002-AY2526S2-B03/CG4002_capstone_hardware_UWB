@@ -3,7 +3,10 @@
 
 // -------- GLOBALS --------
 float anchor2_x = 2.0;    // will be set during calibration; but set to 2m jic
-const float alpha = 0.4;  // 0.2 smoother, 0.4 more responsive; for EMA smoothing
+const float alpha = 0.2;  // 0.2 smoother, 0.4 more responsive; for EMA smoothing
+
+// changed alpha from 0.4 to 0.2
+// moved EMA from x and y to d1 and d2
 
 // -------- FUNCTIONS --------
 void sendAT(String cmd, HardwareSerial &uwb) {

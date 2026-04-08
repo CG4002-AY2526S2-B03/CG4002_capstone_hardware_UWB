@@ -74,6 +74,7 @@ void mqttTask(void *pvParameters) {
       if (mqttClient.isConnected() && hasGameStarted) {
         std::string payload = formatPayload(pos.x, pos.y);
         mqttClient.publish(playerEspPublishTopic, payload, 0, false);
+        
         #ifdef DEBUG
         Serial.print("[MQTT] Position: ");
         Serial.print(pos.x);
@@ -95,6 +96,9 @@ void uwbTask(void *pvParameters) {
   // ===== EMA filtered position =====
   Position pos;
   bool first_position = true;
+
+  float d1_ema = 0;
+  float d2_ema = 0;
 
   float d1 = 0.0, d2 = 0.0;
   bool calibrate = true;  // set true to perform calibration
@@ -126,29 +130,30 @@ void uwbTask(void *pvParameters) {
           calibrate = false;
         }
 
-        // Update median buffers
-        d1_hist[hist_index] = d1;
-        d2_hist[hist_index] = d2;
-        hist_index = (hist_index + 1) % 3;
-
-        // Compute median distances
-        float d1_med = median3(d1_hist[0], d1_hist[1], d1_hist[2]);
-        float d2_med = median3(d2_hist[0], d2_hist[1], d2_hist[2]);
-
         // Compute position
         if (!calibrate) {
-          float x, y;
-          computeXY_LS(d1, d2, x, y);
+          // Update median buffers
+          d1_hist[hist_index] = d1;
+          d2_hist[hist_index] = d2;
+          hist_index = (hist_index + 1) % 3;
+
+          // Compute median distances
+          float d1_med = median3(d1_hist[0], d1_hist[1], d1_hist[2]);
+          float d2_med = median3(d2_hist[0], d2_hist[1], d2_hist[2]);
+
           // ----- EMA smoothing
           if (first_position) {
-            pos.x = x;
-            pos.y = y;
+            d1_ema = d1_med;
+            d2_ema = d2_med;
             first_position = false;
           } else {
-            pos.x = alpha * x + (1 - alpha) * pos.x;
-            pos.y = alpha * y + (1 - alpha) * pos.y;
+            d1_ema = alpha * d1_med + (1 - alpha) * d1_ema;
+            d2_ema = alpha * d2_med + (1 - alpha) * d2_ema;
           }
+
+          computeXY_LS(d1_ema, d2_ema, pos.x, pos.y);
           xQueueSend(positionQueue, &pos, 0);
+
           #ifdef DEBUG
           Serial.print("Position: ");
           Serial.print(pos.x);
@@ -159,6 +164,11 @@ void uwbTask(void *pvParameters) {
       }
     }
   }
+}
+
+float applyEMA(float raw, float &ema_val) {
+  ema_val = alpha * raw + (1 - alpha) * ema_val;
+  return ema_val;
 }
 
 void loop() {
