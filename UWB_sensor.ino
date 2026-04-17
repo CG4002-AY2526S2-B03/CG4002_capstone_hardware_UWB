@@ -8,6 +8,7 @@
 #define UWB_TX 27  // to IO6/TX on UWB sensor
 
 #define DEBUG // enables print statements for debugging 
+#define UWB_TIMEOUT_MS 1000  
 
 HardwareSerial uwb(2);
 
@@ -66,6 +67,7 @@ void setup() {
 
 void mqttTask(void *pvParameters) {
   Position pos;
+
   while (true) {
     if (WiFi.status() != WL_CONNECTED) {
       wifiConnect();
@@ -88,6 +90,9 @@ void mqttTask(void *pvParameters) {
 }
 
 void uwbTask(void *pvParameters) {
+  unsigned long lastD1Time = millis();
+  unsigned long lastD2Time = millis();
+
   // ===== Median filter buffers =====
   float d1_hist[3] = { 0, 0, 0 };
   float d2_hist[3] = { 0, 0, 0 };
@@ -107,6 +112,21 @@ void uwbTask(void *pvParameters) {
   float offset_y = 0.0f;
 
   while (1) {
+
+    // ---- TIMEOUT CHECK ----
+    if ((millis() - lastD1Time > UWB_TIMEOUT_MS) ||
+        (millis() - lastD2Time > UWB_TIMEOUT_MS)) {
+
+        Serial.println("[UWB] One anchor timeout!");
+
+        reinitUWB(uwb, UWB_RX, UWB_TX);
+
+        lastD1Time = millis();
+        lastD2Time = millis();
+
+        continue;
+    }
+
     // Check if calibration requested
     bool calibrateRequest = false;
     if (xQueueReceive(calibrationQueue, &calibrateRequest , 0) == pdTRUE) {
@@ -114,19 +134,25 @@ void uwbTask(void *pvParameters) {
       Serial.println("calibrate received");
     }
 
-    if (uwb.available()) {
+    while (uwb.available()) {
       String line = uwb.readStringUntil('\n');
       line.trim();
 
       #ifdef DEBUG
-      // Serial.println(line);
+      Serial.println(line);
       #endif
 
       String src;
       float dist;
       if (parseDistance(line, src, dist)) {
-        if (src == "1111") d1 = dist;
-        else if (src == "2222") d2 = dist;
+
+        if (src == "1111") {
+          d1 = dist;
+          lastD1Time = millis();  
+        } else if (src == "2222") {
+          d2 = dist;
+          lastD2Time = millis();
+        }
 
         // Perform calibration if requested
         if (calibrate && d1 > 0 && d2 > 0) {

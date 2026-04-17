@@ -117,3 +117,17 @@ bool collectCalibrationSample(float d1, float d2, float &offset_x, float &offset
   sample_count = 0;
   return true;
 }
+
+void reinitUWB(HardwareSerial &uwb, int rx, int tx) {
+  Serial.println("[UWB] Reinitializing...");
+
+  uwb.end();
+  delay(50);
+
+  uwb.begin(921600, SERIAL_8N1, rx, tx);
+  delay(50);
+
+  configureTag(uwb);
+
+  Serial.println("[UWB] Reinit done");
+}
